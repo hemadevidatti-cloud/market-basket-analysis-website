@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market Basket Analysis</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><span class="brand-icon">▦</span><div><b>BasketWise</b><small>Market Basket Analysis</small></div></div>
+  <nav><a class="active" href="#dashboard" data-view="dashboard">▦ &nbsp; Dashboard</a><a href="#upload" data-view="upload">⇧ &nbsp; Upload Data</a><a href="#itemsets" data-view="itemsets">▤ &nbsp; Frequent Itemsets</a><a href="#rules" data-view="rules">↗ &nbsp; Association Rules</a><a href="#insights" data-view="insights">✦ &nbsp; Business Insights</a></nav>
+  <div class="side-note"><b>Cross-sell smarter.</b><p>Turn transaction data into useful product recommendations.</p></div>
+</aside>
+<main>
+<header><div><p class="eyebrow">RETAIL ANALYTICS / OVERVIEW</p><h1>Market Basket Analysis</h1><p class="sub">Discover which products are often purchased together.</p></div><span class="status">● Analysis workspace</span></header>
+{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category,message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+<section class="metric-grid" id="dashboard" data-page="dashboard">
+<div class="metric blue"><span class="metric-icon">▣</span><div><small>Transactions analyzed</small><strong>{{ result.transactions if result else '—' }}</strong><small>Shopping baskets</small></div></div>
+<div class="metric green"><span class="metric-icon">◈</span><div><small>Unique products</small><strong>{{ result.products if result else '—' }}</strong><small>Distinct items</small></div></div>
+<div class="metric purple"><span class="metric-icon">▥</span><div><small>Frequent itemsets</small><strong>{{ result.itemset_total if result else '—' }}</strong><small>Top results shown</small></div></div>
+<div class="metric orange"><span class="metric-icon">↗</span><div><small>Association rules</small><strong>{{ result.rule_total if result else '—' }}</strong><small>Top results shown</small></div></div>
+</section>
+<section class="panel upload-panel" id="upload" data-page="upload">
+<div class="section-heading"><div><p class="eyebrow">STEP 01</p><h2>Upload transaction data</h2><p class="muted">Use your own CSV or try the built-in sample grocery transactions.</p></div><a class="secondary-btn" href="{{ url_for('download_sample') }}">↓ Download sample CSV</a></div>
+<form method="post" enctype="multipart/form-data" class="controls">
+<label class="file-input"> <span>＋</span><div><b>Choose a CSV file</b><small>CSV: TransactionID + Item, or one basket per row</small><small id="selectedFileName" class="file-status">No file selected</small></div><input id="csvFileInput" type="file" name="csv_file" accept=".csv"></label>
+<div id="fileUploadMessage" class="file-message" role="status" aria-live="polite">Choose a CSV file to see its name here.</div>
+<div class="field"><label for="algorithm">Algorithm</label><select id="algorithm" name="algorithm"><option value="apriori" {% if result and result.algorithm == 'APRIORI' %}selected{% endif %}>Apriori</option><option value="fpgrowth" {% if result and result.algorithm == 'FPGROWTH' %}selected{% endif %}>FP-Growth</option></select></div>
+<div class="field"><label for="min_support">Minimum support</label><input id="min_support" name="min_support" type="number" min="0.01" max="1" step="0.01" value="0.10" required><small>Basket proportion (0.10 = 10%)</small></div>
+<div class="field"><label for="min_confidence">Minimum confidence</label><input id="min_confidence" name="min_confidence" type="number" min="0" max="1" step="0.05" value="0.30" required><small>Rule reliability threshold</small></div>
+<button type="submit" class="primary-btn">Run analysis <span>→</span></button>
+</form>
+<div class="format-tip"><b>CSV format tip:</b> For example, columns <code>TransactionID, Item</code> with one row per product in a basket. You can also use rows where each row contains items bought together.</div>
+</section>
+{% if result %}
+<section class="charts-grid" data-page="dashboard">
+<div class="panel chart-panel"><div class="section-heading"><div><p class="eyebrow">STEP 02</p><h2>Frequent itemsets</h2><p class="muted">Products or product groups that appear together often.</p></div><span class="pill">{{ result.algorithm }}</span></div>
+{% if result.top_items %}<canvas id="itemChart" height="190"></canvas>{% else %}<p class="empty">No itemsets met this support threshold. Try a lower minimum support.</p>{% endif %}
+</div>
+<div class="panel chart-panel"><div class="section-heading"><div><p class="eyebrow">STEP 03</p><h2>Association rules by lift</h2><p class="muted">Lift above 1 suggests a positive association.</p></div></div>
+{% if result.top_rules %}<canvas id="ruleChart" height="190"></canvas>{% else %}<p class="empty">No rules met the current thresholds. Try lowering confidence or support.</p>{% endif %}
+</div></section>
+<section class="analysis-success panel" data-page="itemsets">
+  <div class="success-mark">✓</div>
+  <div><p class="eyebrow">ANALYSIS COMPLETE</p><h2>Your transaction data has been analyzed</h2><p class="muted">Your results are shown below. Use the left menu to switch between itemsets, association rules, visualizations, and business insights.</p>{% if uploaded_filename %}<p class="file-message server-file-message">✓ Successfully analyzed: <strong>{{ uploaded_filename }}</strong></p>{% endif %}</div>
+  <span class="pill">{{ result.algorithm }} completed</span>
+</section>
+<section class="panel" id="itemsets" data-page="itemsets"><div class="section-heading"><div><p class="eyebrow">RESULTS</p><h2>Frequent itemsets</h2><p class="muted">Support = share of baskets containing the itemset. Values are proportions from 0 to 1.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Product set</th><th>Support</th><th>Basket count</th></tr></thead><tbody>
+{% for row in result.itemsets %}<tr><td><span class="item-chip">{{ row['items'] }}</span></td><td>{{ "%.3f"|format(row.support) }}</td><td>{{ row.count }}</td></tr>{% else %}<tr><td colspan="3">No frequent itemsets found.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="panel" id="rules" data-page="rules"><div class="section-heading"><div><p class="eyebrow">RESULTS</p><h2>Association rules</h2><p class="muted">Confidence estimates how often the consequent appears when the antecedent is present.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Rule</th><th>Support</th><th>Confidence</th><th>Lift</th></tr></thead><tbody>
+{% for row in result.rules %}<tr><td><b>{{ row.rule }}</b></td><td>{{ row.support }}</td><td>{{ row.confidence }}</td><td><span class="lift {% if row.lift is number and row.lift > 1 %}positive{% endif %}">{{ row.lift }}</span></td></tr>{% else %}<tr><td colspan="4">No association rules found at this threshold.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="panel" id="insights" data-page="insights"><div class="section-heading"><div><p class="eyebrow">STEP 04</p><h2>Actionable business insights</h2><p class="muted">Translate patterns into practical cross-selling experiments.</p></div></div><div class="insight-grid">{% for insight in result.insights %}<article class="insight"><span>✦</span><p>{{ insight }}</p></article>{% endfor %}</div></section>
+{% else %}
+<section class="empty-state panel" data-page="dashboard"><div class="empty-icon">✦</div><h2>Your analysis starts here</h2><p>Run the analysis with sample data or upload a transaction CSV to reveal frequent product combinations, association rules, charts, and recommendations.</p><form method="post" class="sample-form"><input type="hidden" name="algorithm" value="apriori"><input type="hidden" name="min_support" value="0.10"><input type="hidden" name="min_confidence" value="0.30"><button class="primary-btn" type="submit">Analyze sample grocery data →</button></form></section>
+{% endif %}
+<footer>BasketWise · Market Basket Analysis <span>Discover patterns. Test bundles. Grow basket size.</span></footer>
+</main>
+{% if result %}
+<script>
+const itemData = {{ result.top_items|tojson }};
+const ruleData = {{ result.top_rules|tojson }};
+if (itemData.length) new Chart(document.getElementById('itemChart'), {type:'bar',data:{labels:itemData.map(x=>x.label),datasets:[{label:'Support',data:itemData.map(x=>x.support),backgroundColor:'#4b83f5',borderRadius:7}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,max:1,title:{display:true,text:'Support'}}}}});
+if (ruleData.length) new Chart(document.getElementById('ruleChart'), {type:'bar',data:{labels:ruleData.map(x=>x.label),datasets:[{label:'Lift',data:ruleData.map(x=>x.lift),backgroundColor:'#24b89a',borderRadius:7}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,title:{display:true,text:'Lift'}}}}});
+</script>
+{% endif %}
+
+<script>
+/* Show the selected CSV filename immediately, before the form is submitted. */
+(function () {
+  const input = document.getElementById('csvFileInput');
+  const name = document.getElementById('selectedFileName');
+  const message = document.getElementById('fileUploadMessage');
+  if (!input || !name || !message) return;
+  input.addEventListener('change', function () {
+    if (this.files && this.files.length > 0) {
+      const file = this.files[0];
+      name.textContent = file.name;
+      message.textContent = 'CSV selected: ' + file.name + '. Click Run analysis to process this file.';
+      message.classList.add('file-selected');
+    } else {
+      name.textContent = 'No file selected';
+      message.textContent = 'Choose a CSV file to see its name here.';
+      message.classList.remove('file-selected');
+    }
+  });
+})();
+</script>
+
+<script>
+/* Sidebar navigation: display one workspace page at a time. */
+(function () {
+  const links = Array.from(document.querySelectorAll('nav a[data-view]'));
+  const sections = Array.from(document.querySelectorAll('[data-page]'));
+  function showPage(page, updateHash) {
+    sections.forEach(section => {
+      section.style.display = section.dataset.page === page ? '' : 'none';
+    });
+    links.forEach(link => link.classList.toggle('active', link.dataset.view === page));
+    if (updateHash) history.replaceState(null, '', '#' + page);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  links.forEach(link => link.addEventListener('click', function (event) {
+    event.preventDefault();
+    showPage(this.dataset.view, true);
+  }));
+  const requested = location.hash.replace('#', '');
+  const valid = links.some(link => link.dataset.view === requested);
+  const hasResults = {{ 'true' if result else 'false' }};
+  // A POST refresh after analysis should open the results page, not hide results on Dashboard.
+  // Once the page is loaded, sidebar clicks can navigate normally.
+  showPage(hasResults ? 'itemsets' : (valid ? requested : 'dashboard'), false);
+})();
+</script>
+
+</body></html>
